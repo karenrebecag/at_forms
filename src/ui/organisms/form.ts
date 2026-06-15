@@ -1,4 +1,6 @@
-import type { FieldDef, FormConfig } from "../../core/types";
+import type { FieldDef, FormConfig, OptionsRef, SelectOption } from "../../core/types";
+import type { Dict } from "../../i18n";
+import { COUNTRIES, DIALLING_CODES } from "../../data/options";
 import { label } from "../atoms/label";
 import { input } from "../atoms/input";
 import { select } from "../atoms/select";
@@ -12,18 +14,34 @@ function fieldId(name: string): string {
   return `atfx-field-${name}`;
 }
 
-function renderField(def: FieldDef): HTMLElement {
+function resolveOptions(ref: OptionsRef, dict: Dict): SelectOption[] {
+  if (ref === "countries") return COUNTRIES;
+  if (ref === "diallingCodes") return DIALLING_CODES;
+  return dict.tradingOptions;
+}
+
+function labelText(schemaKey: string, dict: Dict): string {
+  return dict.labels[schemaKey as keyof Dict["labels"]] ?? schemaKey;
+}
+
+function renderField(def: FieldDef, dict: Dict): HTMLElement {
   const id = fieldId(def.name);
 
   if (def.kind === "acceptance") {
-    const control = acceptance({ id, name: def.name, label: def.label, defaultChecked: def.defaultChecked });
+    const control = acceptance({ id, name: def.name, label: dict.acceptance, defaultChecked: def.defaultChecked });
     return fieldGroup({ name: def.name, control, colSpan: def.colSpan ?? 100 });
   }
 
-  const labelEl = label({ forId: id, text: def.label, required: def.required });
+  const labelEl = label({ forId: id, text: labelText(def.schemaKey, dict), required: def.required });
 
   if (def.kind === "select") {
-    const control = select({ id, name: def.name, options: def.options, required: def.required, placeholder: def.placeholder });
+    const control = select({
+      id,
+      name: def.name,
+      options: resolveOptions(def.optionsRef, dict),
+      required: def.required,
+      placeholder: dict.selectPlaceholder,
+    });
     return fieldGroup({ name: def.name, control, labelEl, colSpan: def.colSpan ?? 100 });
   }
 
@@ -32,9 +50,8 @@ function renderField(def: FieldDef): HTMLElement {
     name: def.name,
     type: def.kind,
     required: def.required,
-    placeholder: def.placeholder,
     pattern: def.pattern,
-    title: def.title,
+    title: def.kind === "tel" ? dict.phoneTitle : undefined,
   });
   return fieldGroup({ name: def.name, control, labelEl, colSpan: def.colSpan ?? 100 });
 }
@@ -47,8 +64,8 @@ function hiddenInput(name: string, value: string): HTMLInputElement {
   return el;
 }
 
-// Organismo: ensambla el <form> completo a partir de la config (átomos -> moléculas -> form).
-export function renderForm(config: FormConfig): HTMLFormElement {
+// Organismo: ensambla el <form> completo (átomos -> moléculas -> form) en el idioma activo.
+export function renderForm(config: FormConfig, dict: Dict): HTMLFormElement {
   const form = document.createElement("form");
   form.className = "atfx-form";
   form.method = "post";
@@ -56,21 +73,19 @@ export function renderForm(config: FormConfig): HTMLFormElement {
   if (config.formAttrs?.id) form.id = config.formAttrs.id;
   if (config.formAttrs?.name) form.setAttribute("name", config.formAttrs.name);
 
-  // Campos top-level que enruta admin-ajax (post_id, form_id, action, referrer...).
   for (const [name, value] of Object.entries(config.meta)) form.appendChild(hiddenInput(name, value));
 
   const fields = document.createElement("div");
   fields.className = "atfx-fields";
-  for (const def of config.fields) fields.appendChild(renderField(def));
+  for (const def of config.fields) fields.appendChild(renderField(def, dict));
 
-  // Hidden de negocio (form_fields[...]).
   for (const [name, value] of Object.entries(config.hidden ?? {})) {
     fields.appendChild(hiddenInput(`form_fields[${name}]`, value));
   }
 
   const submitWrap = document.createElement("div");
   submitWrap.className = "atfx-field atfx-col-100 atfx-submit";
-  submitWrap.appendChild(button({ label: config.submitLabel, id: "atfx-submit-btn" }));
+  submitWrap.appendChild(button({ label: dict.submit, id: "atfx-submit-btn" }));
   fields.appendChild(submitWrap);
 
   form.appendChild(fields);

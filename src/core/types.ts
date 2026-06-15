@@ -1,11 +1,11 @@
 import type { ZodTypeAny } from "zod";
+import type { Dict } from "../i18n";
 
 // Respuesta cruda del endpoint de Elementor Pro (admin-ajax.php).
 export interface ElementorResponse {
   success: boolean;
   data: {
     message?: string;
-    // Errores por campo, keyed por el name interno (sin el wrapper form_fields[]).
     errors?: Record<string, string>;
     data?: {
       redirect_url?: string;
@@ -24,19 +24,21 @@ export interface SelectOption {
   label: string;
 }
 
-// FieldDef es la fuente única: describe cómo renderizar el átomo, con qué `name` se envía
-// (dentro de form_fields[]) y con qué `schemaKey` valida en Zod.
+// De dónde salen las opciones de un select: data estática o el diccionario activo.
+export type OptionsRef = "countries" | "diallingCodes" | "trading";
+
+// FieldDef es la fuente única de render + name de envío + clave de validación/i18n.
+// El label NO vive aquí: se resuelve por schemaKey desde el diccionario del idioma.
 interface BaseField {
   schemaKey: string;
   name: string;
-  label: string;
   colSpan?: ColSpan;
   required?: boolean;
 }
 
 export type FieldDef =
-  | (BaseField & { kind: "text" | "email" | "tel"; placeholder?: string; pattern?: string; title?: string })
-  | (BaseField & { kind: "select"; options: SelectOption[]; placeholder?: string })
+  | (BaseField & { kind: "text" | "email" | "tel"; pattern?: string })
+  | (BaseField & { kind: "select"; optionsRef: OptionsRef })
   | (BaseField & { kind: "acceptance"; defaultChecked?: boolean });
 
 export interface IntegrationContext {
@@ -47,26 +49,27 @@ export interface IntegrationContext {
 
 export type IntegrationHook = (ctx: IntegrationContext) => void | Promise<void>;
 
-export interface FormConfig<S extends ZodTypeAny = ZodTypeAny> {
-  // Coincide con el atributo data-atfx-form-mount del <div> en Elementor.
+export interface FormConfig {
+  // Coincide con data-atfx-form-mount. Genérico: el caso de uso lo definen los atributos.
   key: string;
-  schema: S;
-  // Campos visibles, en orden de render. Única fuente de render + mapping + validación.
   fields: FieldDef[];
   // Campos top-level que admin-ajax necesita para enrutar (post_id, form_id, action, referrer...).
   meta: Record<string, string>;
-  // Hidden de negocio (se envían como form_fields[name]).
+  // Hidden de negocio base (form_fields[...]); el idioma y los webinar se inyectan por instancia.
   hidden?: Record<string, string>;
-  submitLabel: string;
   formAttrs?: { id?: string; name?: string; action?: string };
-  // Transforma el valor validado antes de enviarlo, keyed por schemaKey.
+  // El schema depende del idioma (mensajes traducidos), por eso es factory.
+  createSchema: (t: Dict) => ZodTypeAny;
   transforms?: Record<string, (value: unknown) => string>;
-  // Sobrescribe `referrer` con window.location.href; el pipeline deriva Landing_Page_Id__c
-  // y los utm_*__c de ahí (server-side). Default: true.
   captureLandingUrl?: boolean;
   integrations?: IntegrationHook[];
-  // URL a abrir en ventana nueva DURANTE el gesto de submit (evita popup blocker).
-  popupUrl?: (form: HTMLFormElement) => string | undefined;
-  // Se ejecuta solo cuando Salesforce confirma el éxito (success:true).
-  onSuccess?: (ctx: { response: ElementorResponse; form: HTMLFormElement }) => void;
+}
+
+// Instancia resuelta de un formulario (config + idioma + opciones del shortcode).
+export interface FormInstance {
+  config: FormConfig;
+  schema: ZodTypeAny;
+  dict: Dict;
+  mount: HTMLElement;
+  zoomLink?: string;
 }
