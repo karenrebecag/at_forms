@@ -197,9 +197,11 @@
 
 .atfx-form .atfx-checkbox-wrap {
   flex: 0 0 auto;
+  width: auto;
   cursor: pointer;
   margin-top: 0.1em;
   display: block;
+  font-weight: normal;
 }
 
 /* Oculto visualmente pero accesible para lectores de pantalla y el DOM */
