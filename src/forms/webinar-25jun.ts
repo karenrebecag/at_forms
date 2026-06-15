@@ -1,6 +1,5 @@
 import type { FormConfig } from "../core/types";
 import { registerForm } from "../core/registry";
-import { DEFAULT_ATTRIBUTION } from "../core/attribution";
 import { webinar25junSchema } from "../schemas/webinar-25jun";
 import { ga4Lead, gtmLead, metaLead } from "../integrations";
 
@@ -19,7 +18,8 @@ const config: FormConfig<typeof webinar25junSchema> = {
     tradingExperience: "Trading_Experience__c",
     acceptance: "field_8f8f3d5",
   },
-  attribution: DEFAULT_ATTRIBUTION,
+  // captureLandingUrl: true por defecto -> el engine pone referrer = location.href,
+  // del cual el pipeline de ATFX deriva Landing_Page_Id__c y los utm_*__c (server-side).
   integrations: [ga4Lead, gtmLead, metaLead],
   // Abre el Zoom del webinar; la URL vive en un hidden que Elementor ya renderiza.
   popupUrl: (form) =>

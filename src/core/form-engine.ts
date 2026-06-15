@@ -1,6 +1,6 @@
 import type { FormConfig } from "./types";
 import { collectValues, serializeForm, applyValidated, setLoading } from "./dom";
-import { collectAttribution } from "./attribution";
+import { applyLandingUrl } from "./attribution";
 import { clearErrors, renderErrors, zodToFieldErrors, serverToFieldErrors } from "./errors";
 import { submitToElementor } from "./submit-elementor";
 
@@ -32,11 +32,7 @@ async function handleSubmit(form: HTMLFormElement, config: FormConfig): Promise<
 
   const payload = serializeForm(form);
   applyValidated(payload, config, parsed.data as Record<string, unknown>);
-  if (config.attribution?.length) {
-    for (const [sfField, value] of Object.entries(collectAttribution(config.attribution))) {
-      payload.set(`form_fields[${sfField}]`, value);
-    }
-  }
+  if (config.captureLandingUrl !== false) applyLandingUrl(payload);
 
   try {
     const response = await submitToElementor(form, payload);

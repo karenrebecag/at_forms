@@ -17,20 +17,6 @@ export interface ElementorResponse {
 
 export type FieldErrors = Record<string, string>;
 
-// De dónde se obtiene un campo de atribución que el form no captura nativamente.
-export type AttributionSource =
-  | { type: "url"; param: string }
-  | { type: "href" }
-  | { type: "cookie"; name: string }
-  | { type: "referrer" }
-  | { type: "value"; value: string };
-
-export interface AttributionField {
-  // name interno de Salesforce/Elementor (se envía como form_fields[sfField]).
-  sfField: string;
-  from: AttributionSource;
-}
-
 export interface IntegrationContext {
   values: Record<string, unknown>;
   response: ElementorResponse;
@@ -47,8 +33,10 @@ export interface FormConfig<S extends ZodTypeAny = ZodTypeAny> {
   fields: Record<keyof TypeOf<S> & string, string>;
   // Transforma el valor validado antes de enviarlo (ej. mapear a códigos de SF).
   transforms?: Partial<Record<keyof TypeOf<S> & string, (value: unknown) => string>>;
-  // Campos que el form no captura y se inyectan desde URL/cookies (atribución).
-  attribution?: AttributionField[];
+  // Sobrescribe el campo top-level `referrer` con window.location.href antes de enviar.
+  // El pipeline de ATFX deriva Landing_Page_Id__c y los utm_*__c del `referrer`
+  // (server-side, solo en leads reales); mandar esos campos directo NO sirve. Default: true.
+  captureLandingUrl?: boolean;
   integrations?: IntegrationHook[];
   // URL a abrir en ventana nueva DURANTE el gesto de submit (evita popup blocker).
   popupUrl?: (form: HTMLFormElement) => string | undefined;
