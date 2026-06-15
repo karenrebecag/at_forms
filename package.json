@@ -1,0 +1,20 @@
+{
+  "name": "atfx-forms",
+  "version": "1.0.0",
+  "description": "Librería versionada de formularios para ATFX LATAM. Sirve lógica + estilos vía jsDelivr; Elementor solo aporta semántica HTML.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "dev": "node esbuild.config.mjs --serve",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.0",
+    "typescript": "^5.5.4"
+  }
+}

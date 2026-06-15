@@ -1,0 +1,73 @@
+name: release
+
+# Deploy = git push origin main. El CI compila, taggea, regenera loader.js y purga jsDelivr.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "loader.js"
+      - "package.json"
+      - "esbuild.config.mjs"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Compute next patch tag
+        id: tag
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            next="v1.0.0"
+          else
+            ver=${latest#v}
+            major=$(echo "$ver" | cut -d. -f1)
+            minor=$(echo "$ver" | cut -d. -f2)
+            patch=$(echo "$ver" | cut -d. -f3)
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "version=${next#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate loader.js with new version
+        run: |
+          sed -i 's/var v = "[^"]*";/var v = "${{ steps.tag.outputs.version }}";/' loader.js
+
+      - name: Commit dist + loader and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist loader.js
+          git commit -m "build: release ${{ steps.tag.outputs.next }}" || echo "nothing to commit"
+          git tag ${{ steps.tag.outputs.next }}
+          git push origin HEAD:main
+          git push origin ${{ steps.tag.outputs.next }}
+
+      - name: Purge jsDelivr (loader en @latest)
+        run: |
+          curl -s "https://purge.jsdelivr.net/gh/karenrebecag/at_forms@latest/loader.js" || true
