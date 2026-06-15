@@ -1,126 +1,155 @@
 # atfx-forms
 
 Librería versionada de formularios para ATFX LATAM. Lógica + estilos servidos vía jsDelivr;
-**Elementor solo aporta semántica HTML**. Build con esbuild + TypeScript + Zod.
+**Elementor solo aporta un punto de montaje**. Build: esbuild + TypeScript + Zod + GSAP.
+Render atómico (atoms/molecules/organisms) con design system por tokens, i18n y theming.
 
 ## Identidad
 
 | Campo | Valor |
 |---|---|
 | Repo | `karenrebecag/at_forms` (público — requisito de jsDelivr /gh/) |
+| Remote | `git@github.com:karenrebecag/at_forms.git` (push por SSH) |
 | CDN loader | `https://cdn.jsdelivr.net/gh/karenrebecag/at_forms@latest/loader.js` |
-| Sitio destino | www.atfxlatam.com (WordPress + Elementor Pro, detrás de Cloudflare, WP Engine) |
+| Sitio destino | www.atfxlatam.com (WordPress + Elementor Pro, Cloudflare, WP Engine) |
 | Endpoint de envío | `POST /wp-admin/admin-ajax.php` con `action=elementor_pro_forms_send_form` |
-| Salesforce org (alias sf) | `atfx` (solo lectura desde MCP Salesforce DX) |
+| Salesforce org (alias MCP) | `atfx` — **solo lectura** |
+| Versión desplegada | ver tag más alto (`git ltag` / jsDelivr @latest). Última conocida: v1.0.3+ |
+
+## Cómo se usa en Elementor (contrato actual)
+
+Un widget **HTML** con un `<div>` de montaje + el loader. El mismo shortcode sirve todos los
+casos de uso; el comportamiento lo definen los **atributos**:
+
+```html
+<div data-atfx-form-mount="lead"
+     data-lang="es"                 <!-- es | en | pt   (default es) -->
+     data-theme="light"             <!-- light | dark   (default light) -->
+     data-zoom-link="https://atfx.zoom.us/webinar/register/WN_..."  <!-- opcional -->
+     data-webinar-topic="Trading Experience"   <!-- opcional -->
+     data-webinar-date="2026-06-25 18:00:00"   <!-- opcional -->
+     data-lead-source="Webinar"></div>          <!-- opcional, default "Webinar" -->
+
+<script data-cfasync="false"
+  src="https://cdn.jsdelivr.net/gh/karenrebecag/at_forms@latest/loader.js"></script>
+```
+
+Reglas de los atributos:
+- `data-zoom-link` presente → **modo webinar**: setea `Webinar_venue_zoom_link__c`, abre Zoom en
+  pestaña nueva al confirmar (popup abierto dentro del gesto de submit; se cierra si SF falla),
+  e inyecta topic/date/Comment. Ausente/vacío → **lead simple** (solo envía).
+- `data-lang` → traduce labels, opciones, mensajes de validación Zod, errores y thank-you;
+  mapea a códigos SF (ver i18n).
+- `data-theme` → switch de tokens CSS por `[data-atfx-theme]` (no recrea CSS).
+- Varios forms en una página: basta **un** `<script>` del loader.
+- Pegar en widget **HTML**, NO en el widget Form de Elementor (evita doble submit).
 
 ## Arquitectura
 
 ```
-src/*.ts  --esbuild-->  dist/forms.js (Zod inlined, minificado) + dist/forms.css
-push main -> CI (release.yml): typecheck + build + tag patch + regenera loader + purga jsDelivr
-loader.js @latest -> inyecta el tag inmutable @vX.Y.Z
-Elementor (widget HTML): <form data-atfx-form="KEY"> + <script .../loader.js>
+src/*.ts  --esbuild-->  dist/forms.js (Zod + GSAP inlined, minificado) + dist/forms.css
+push main -> CI (.github/workflows/release.yml): typecheck + build + tag patch +
+             regenera loader.js + commitea dist + purga jsDelivr @latest
+loader.js @latest -> inyecta el tag inmutable @vX.Y.Z (CSS + JS)
 ```
-
-El motor intercepta el submit del form, valida con Zod, enriquece, envía a admin-ajax.php,
-maneja errores por campo, dispara integraciones y abre Zoom solo si SF confirma.
 
 ### Estructura
-- `src/index.ts` — autoDetect `[data-atfx-form]`, side-effect imports de cada form.
-- `src/core/` — engine genérico (types, registry, dom, attribution, errors, submit, form-engine).
-- `src/schemas/<key>.ts` — schema Zod + mensajes.
-- `src/forms/<key>.ts` — FormConfig (fields, transforms, integrations) + registerForm.
-- `src/integrations/` — GA4 / GTM / Meta (corren tras éxito confirmado).
-- `src/styles/forms.css` — estados error/loading/success.
+```
+src/
+├── index.ts                 # boot: lee atributos del mount, arma instancia, render + bind + reveal
+├── core/
+│   ├── types.ts             # FieldDef (fuente única), FormConfig, FormInstance, ElementorResponse
+│   ├── registry.ts          # registro de forms por key
+│   ├── dom.ts               # collectValues / serializeForm / applyValidated / setLoading
+│   ├── attribution.ts       # applyLandingUrl -> referrer = location.href
+│   ├── errors.ts            # zod/server -> slots [data-error-for], banner de form
+│   ├── submit-elementor.ts  # POST admin-ajax + timeout + reintento por red
+│   └── form-engine.ts       # validar -> enriquecer -> enviar -> errores -> thank-you inline
+├── ui/
+│   ├── atoms/               # input, select, acceptance, button, label, error-message
+│   ├── molecules/           # field-group (label + control + slot de error)
+│   ├── organisms/           # form (renderForm), thank-you (renderThankYou)
+│   └── motion.ts            # GSAP: revealForm / revealThankYou (respeta prefers-reduced-motion)
+├── schemas/lead.ts          # createLeadSchema(t) — factory por idioma
+├── forms/lead.ts            # config genérica "lead": fields + meta + hidden + integraciones
+├── i18n/index.ts            # DICTS es/en/pt + resolveLang + códigos SF
+├── data/options.ts          # COUNTRIES + DIALLING_CODES
+└── styles/forms.css         # design system por tokens (--atfx-*) + theme dark + thank-you
+```
 
-### Contrato de desacople
-Lo único que debe permanecer estable es el `name` de cada input (`form_fields[...]`).
-La semántica (labels, orden, columnas) puede cambiar en Elementor sin tocar el repo.
-El mapping campo->Salesforce vive en `src/forms/<key>.ts`.
+### Conceptos clave
+- **`FieldDef` es la fuente única**: `schemaKey` (validación/i18n) + `name` (envío form_fields[]) +
+  `kind` (render) + `optionsRef` + `colSpan`. Render, mapping a SF y validación salen de ahí.
+- **Labels NO viven en FieldDef**: se resuelven por `schemaKey` desde el diccionario del idioma.
+- **Config genérica** (`key:"lead"`): la misma para todos los casos; la instancia se arma en
+  `index.ts` mezclando hidden base + idioma + webinar según atributos.
+- **Theme**: `index.ts` pone `form.dataset.atfxTheme`; CSS sobreescribe tokens en
+  `.atfx-form[data-atfx-theme="dark"]`. Light = `:root`.
+- **GSAP** se bundlea (no se asume presente como en Webflow). Sube el bundle a ~150kb.
 
-## Hallazgos verificados contra producción (15 jun 2026)
+## i18n (verificado contra producción)
 
-Investigación del form del webinar 25jun (Elementor -> admin-ajax -> middle DB -> Salesforce).
+Códigos SF reales (de `GROUP BY` en Lead):
+| lang | `Email_language_lead__c` | `Landing_Page_Language__c` |
+|------|--------------------------|----------------------------|
+| es | ESP | esp |
+| en | ENG | en |
+| pt | PTG | pt |
 
-### 1. El pipeline a Salesforce es ASÍNCRONO y en lotes
-- `admin-ajax.php` responde `success:true` al instante (encola en el middle DB), pero el lead
-  aparece en Salesforce **en lotes** (~cada 5-35 min, job que dispara en segundo `:38`).
-  Doc CRM: "Through middle database or Zapier go into Salesforce."
-- Implicación: nunca esperes el lead en SF inmediatamente. `success:true` = encolado, no = en SF.
-- `aanumber` (ej. `wp20260615...`) en la respuesta = id de confirmación del lado WordPress.
+- El **value** de `Trading_Experience__c` es canónico (`Principiante`/`Intermedio`/`Avanzado`) en
+  todo idioma; solo el label visible se traduce → SF queda consistente.
 
-### 2. admin-ajax acepta valores arbitrarios (no valida contra picklists)
-- `Trading_Experience__c` NO es un picklist restringido: SF guarda exactamente lo que recibe.
-  Verificado: `persona_2`, `Principiante`, `Beginner`, `0-6 meses (Principiante)` se guardaron
-  literales. Los `persona_2/4/5` originales eran solo lo que el form mandaba, no un requisito de SF.
-- **Fix aplicado**: el `<select>` envía valores descriptivos (`Principiante`/`Intermedio`/`Avanzado`).
-  El schema además limpia el sufijo legacy `_HolaMemo` con `z.preprocess`.
+## Hallazgos verificados (15 jun 2026) — pipeline Elementor -> SF
 
-### 3. Atribución: se deriva del `referrer`, NO de los campos que mandes
-- `Landing_Page_Id__c` se deriva del campo top-level **`referrer`** (la URL de aterrizaje).
-  Si `referrer` lleva query string con UTMs, se guarda completo; si no, queda la URL base.
-- Los campos `utm_source__c`, `utm_medium__c`, `utm_campaign__c`, `utm_content__c`, `utm_term__c`,
-  `GCLID__c` enviados directo en el form **se ignoran**. Una automatización server-side los
-  parsea de la landing URL.
-- **Bug raíz del form actual**: el hidden `referrer` está fijo con la URL base SIN UTMs ->
-  ningún lead del webinar tiene atribución.
-- **Fix aplicado**: el motor sobrescribe `referrer` = `window.location.href` antes de enviar
-  (`captureLandingUrl`, default true). NO se inyectan campos utm_*__c (se eliminó esa lógica).
+1. **Pipeline asíncrono en lotes** (middle DB / Zapier). `success:true` = encolado, NO = en SF.
+   Los lotes caen irregulares (~5-35+ min; segundo `:38`). Nunca esperes el lead al instante.
+2. **admin-ajax acepta valores arbitrarios** (no valida picklists). `Trading_Experience__c` no es
+   restringido: los `persona_2/4/5` originales eran solo lo que el form mandaba. Fix = descriptivos.
+3. **Atribución por `referrer`, no por campos**: `Landing_Page_Id__c` se deriva del campo top-level
+   `referrer`; `utm_*__c`/`GCLID__c` enviados directo se IGNORAN (los parsea SF server-side de la
+   landing URL). Por eso el motor pone `referrer = location.href` (`captureLandingUrl`, default true).
+4. **Leads de prueba se saltan el enriquecimiento de UTMs**: `Is_Test_Account__c=true` (90% reales
+   con utm vs 5% test). El flag NO es por dominio: un `@gmail.com` con "test" en nombre/email también
+   se marca test. `Landing_Page_Id__c` sí se puebla en test. Para ver utm_*__c reales: email no-test.
+5. **Campos de webinar no son columnas del Lead**: `Webinar_topic__c`/`Webinar_date_time__c`/
+   `Webinar_venue_zoom_link__c` los mapea el connector; probablemente aterrizan en el **Campaign
+   record** (doc CRM: "cada registro crea un campaign record"), no en el Lead.
+6. **jsDelivr cachea la resolución de `@latest`**: tras un tag nuevo puede seguir sirviendo el
+   anterior varios minutos aunque el purge responda 200. URLs por commit (`@<hash>`) resuelven al
+   instante. El usuario NO quiere fijar versiones; se queda en `@latest` y se espera la propagación.
+   (Patrón de espera: poll en background hasta que aparezca un string nuevo del bundle.)
+7. **CORS**: admin-ajax solo permite `Origin: https://www.atfxlatam.com`. curl y forms nativos no
+   aplican CORS; fetch desde otro origen sí se bloquea. La consola del propio sitio sí puede llamarlo.
+8. El checkbox de aceptación es **required a nivel Elementor/WP**: vacío rechaza antes de SF.
 
-### 4. Los leads de prueba se saltan el enriquecimiento de UTMs
-- Cobertura de `utm_source__c`: leads reales 1831/2043 (**90%**); test 2/40 (**5%**).
-- El flag `Is_Test_Account__c=true` **NO depende del dominio**: un `@gmail.com` con "test" en
-  nombre/email también quedó marcado test. Lo dispara probablemente el substring "test" y/o la
-  landing de preview (`?...&preview=true`). Buena noticia: esos leads **no** se asignan a ventas.
-- Implicación: **no se puede verificar el desglose de UTMs con emails de prueba** — el
-  enriquecimiento no corre para test accounts. `Landing_Page_Id__c` sí se puebla incluso en test
-  (de ahí se valida el canal `referrer -> Landing_Page_Id__c`). Para ver los `utm_*__c`
-  poblándose haría falta un email real (con cuidado: ese sí va a ventas).
+## Desarrollo
 
-### 5. Otros
-- CORS: `admin-ajax.php` solo permite `Origin: https://www.atfxlatam.com`. Desde otro origen
-  (localhost, file://) el fetch se bloquea; curl y forms nativos no aplican CORS.
-- El checkbox de aceptación es **required a nivel Elementor/WP**: enviarlo vacío rechaza el lead
-  antes de llegar a SF (`{"success":false, errors:{...:"This field is required."}}`).
-- gaconnector_* y campos GA: dependen del plugin GA Connector (cookies/JS del navegador);
-  no se pueblan en envíos sin sesión de browser.
-- Algunos envíos nunca sincronizan a SF (vimos `@test.com` y un duplicado caer fuera) pese a
-  `success:true`: el middle DB deduplica/descarta. No es bug del form.
+```bash
+npm install
+npm run typecheck     # tsc --noEmit
+npm run build         # genera dist/
+npm run dev           # build + watch + server en :8765 (sirve preview.html)
+```
+`preview.html` (gitignored) monta varias instancias (idiomas/themes/webinar) contra dist local.
 
-### 6. jsDelivr cachea la resolución de `@latest` (operacional)
-- Tras crear un tag nuevo, `@latest/loader.js` puede seguir sirviendo el anterior varios
-  minutos aunque `purge.jsdelivr.net` responda 200 (el purge limpia el archivo, no re-resuelve
-  el ref de inmediato). Confirmado: tardó ~min en pasar de 1.0.0 a 1.0.1.
-- Para test inmediato sin esperar cache: URL por commit `@<hash>` (inmutable, resuelve al toque).
-  El usuario NO quiere fijar versiones en Elementor; se queda en `@latest` y se espera la propagación.
+## Deploy
 
-## Validación end-to-end (15 jun 2026, confirmada en SF)
-- Payload del bundle v1.0.1: `referrer = location.href` y **sin** `form_fields[Landing_Page_Id__c]`.
-- En Salesforce: `Landing_Page_Id__c` = exactamente el `referrer` que puso el motor. Canal probado.
-- `Trading_Experience__c` guardado descriptivo (`Avanzado`/`Principiante`), ya no `persona_*`.
-- Falta solo la prueba con UTMs reales (requiere landing publicada + URL con utm_* + email no-test).
+`git push origin main` (SSH). El CI: typecheck + build + tag patch (vX.Y.(Z+1)) + regenera
+loader.js + commitea dist + purga `@latest`. Tras pushear, el CI commitea sobre main, así que
+antes del siguiente push hacer `git pull --rebase origin main`.
 
-## Pendiente de despliegue en la landing real
-- Lo validado corre en el form de **preview** `pruebaskarencodeform`, NO en la página publicada
-  `training-sessions-25jun`. Mientras la página real siga con el form viejo, seguirá mandando
-  `persona_*`/`_HolaMemo`.
-- Para cerrar: en la página publicada (1) reemplazar el form por el HTML descriptivo
-  (`~/Desktop/atfx-form-webinar-25jun.html`), (2) dejar el `<script>` del loader `@latest`,
-  (3) quitar el form/script viejos (incluido el que abría Zoom en el click).
+Verificación de leads (MCP Salesforce, solo lectura):
+```sql
+SELECT FirstName, Email, Trading_Experience__c, Email_language_lead__c, Landing_Page_Language__c,
+       Landing_Page_Id__c, Is_Test_Account__c, CreatedDate
+FROM Lead WHERE Email = '...' ORDER BY CreatedDate DESC
+```
 
 ## Reglas de operación
-- Salesforce vía MCP es **solo lectura**: usar para verificar, nunca para escribir.
-- No meter secretos/tokens en este repo: el bundle es público en jsDelivr (visible en el browser).
-- Pegar el form en un widget **HTML** de Elementor (no en el widget Form) para evitar doble submit.
-- Para probar contra producción usar emails `@debugtest.com` (quedan marcados como test).
-- Deploy = `git push origin main` (remote por SSH: `git@github.com:karenrebecag/at_forms.git`).
-
-## Verificación de leads (SOQL útil)
-```sql
-SELECT FirstName, Email, Trading_Experience__c, utm_source__c, utm_campaign__c,
-       Landing_Page_Id__c, Is_Test_Account__c, CreatedDate
-FROM Lead WHERE Email IN ('...') ORDER BY CreatedDate DESC
-```
-Campos clave del Lead: `Trading_Experience__c`, `Landing_Page_Id__c`, `utm_source__c`,
-`utm_medium__c`, `utm_campaign__c`, `utm_content__c`, `utm_term__c`, `GCLID__c`,
-`Is_Test_Account__c`, `Entity__c`, `Country_of_Residence_Lead__c`, `Email_language_lead__c`.
+- Salesforce vía MCP = **solo lectura**. Nunca escribir.
+- No meter secretos en el repo: el bundle es público en jsDelivr (visible en el browser).
+- Probar contra prod con emails `@debugtest.com` (quedan marcados test; no van a ventas, pero
+  tampoco enriquecen utm). Para validar utm reales hace falta email no-test (cuidado: va a ventas).
+- Pegar el form en widget HTML, no en el widget Form de Elementor.
+- Pendiente de seguridad: un token se pegó en el chat en una sesión previa — si tenía valor real,
+  rotarlo. No usar `.env` aquí para secretos de frontend.

@@ -8,6 +8,7 @@
 import { getForm } from "./core/registry";
 import { bindForm } from "./core/form-engine";
 import { renderForm } from "./ui/organisms/form";
+import { revealForm } from "./ui/motion";
 import { DICTS, resolveLang } from "./i18n";
 
 // Side-effect import: registra la config.
@@ -54,10 +55,13 @@ function boot(): void {
 
     const instanceConfig = { ...config, hidden };
     const schema = config.createSchema(dict);
+    const theme = mount.dataset.theme === "dark" ? "dark" : "light";
 
     const form = renderForm(instanceConfig, dict);
+    form.dataset.atfxTheme = theme; // CSS hace el switch de tokens por [data-atfx-theme]
     mount.replaceChildren(form);
     bindForm(form, { config: instanceConfig, schema, dict, mount, zoomLink: zoomLink || undefined });
+    revealForm(form);
   });
 }
 

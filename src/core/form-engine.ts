@@ -4,6 +4,7 @@ import { applyLandingUrl } from "./attribution";
 import { clearErrors, renderErrors, zodToFieldErrors, serverToFieldErrors } from "./errors";
 import { submitToElementor } from "./submit-elementor";
 import { renderThankYou } from "../ui/organisms/thank-you";
+import { revealThankYou } from "../ui/motion";
 
 // Conecta el <form> renderizado con su instancia: valida, enriquece, envía, maneja errores,
 // abre Zoom solo si hay link, y al confirmar reemplaza el form por la pantalla de gracias (inline).
@@ -59,7 +60,9 @@ async function handleSubmit(form: HTMLFormElement, instance: FormInstance): Prom
     }
 
     // Thank-you inline: reemplaza el form sin sacar al usuario del flujo (sin redirect).
-    mount.replaceChildren(renderThankYou(dict, { zoomLink }));
+    const thankYou = renderThankYou(dict, { zoomLink });
+    mount.replaceChildren(thankYou);
+    revealThankYou(thankYou);
   } catch {
     popup?.close();
     renderErrors(form, {}, config.fields, dict.errors.connection);

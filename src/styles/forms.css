@@ -22,6 +22,16 @@
   color: var(--atfx-text);
 }
 
+/* Theme switch por atributo data-atfx-theme. Default (light) = tokens de :root. */
+.atfx-form[data-atfx-theme="dark"] {
+  --atfx-bg: rgba(255, 255, 255, 0.06);
+  --atfx-text: #ffffff;
+  --atfx-label: rgba(255, 255, 255, 0.75);
+  --atfx-placeholder: rgba(255, 255, 255, 0.45);
+  --atfx-border: rgba(255, 255, 255, 0.22);
+  --atfx-border-focus: #22d3ee;
+}
+
 /* Layout: grid de 10 columnas; colSpan mapea a span exacto (100/50/30/20). */
 .atfx-fields {
   display: grid;
@@ -150,7 +160,6 @@
   text-align: center;
   gap: 0.75rem;
   padding: 2rem 1rem;
-  animation: atfx-fade-in 0.3s ease both;
 }
 .atfx-thankyou-icon {
   width: 56px;
@@ -185,9 +194,4 @@
   justify-content: center;
   text-decoration: none;
   line-height: var(--atfx-control-height);
-}
-
-@keyframes atfx-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
 }
