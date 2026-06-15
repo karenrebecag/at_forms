@@ -1,6 +1,9 @@
 # Changelog
 
-## v1.1.0 — atribución vía referrer
+> Nota: el CI hace solo bump de patch en cada push a `main` con cambios en `src/**`.
+> Cambios solo de docs (`CLAUDE.md`, `CHANGELOG.md`) no disparan release ni tag.
+
+## v1.0.1 — atribución vía referrer (validado en producción)
 
 Tras investigación contra producción (15 jun 2026), corrección del modelo de atribución:
 
@@ -10,14 +13,21 @@ Tras investigación contra producción (15 jun 2026), corrección del modelo de 
   `Landing_Page_Id__c` / `GCLID__c`: el pipeline los ignoraba.
 - `attribution.ts` reducido a `applyLandingUrl()`; removidos `DEFAULT_ATTRIBUTION`,
   `AttributionField`, `AttributionSource` y `FormConfig.attribution`.
-- Documentados todos los hallazgos en `CLAUDE.md` (pipeline asíncrono en lotes, valores
-  arbitrarios aceptados, atribución por referrer, test accounts sin enriquecimiento, CORS).
+- Documentados todos los hallazgos en `CLAUDE.md`.
+
+### Validación end-to-end (confirmada en Salesforce)
+- Payload del bundle nuevo: `referrer = location.href` y SIN `form_fields[Landing_Page_Id__c]`. ✓
+- En SF, `Landing_Page_Id__c` = exactamente el `referrer` enviado por el motor. ✓
+- `Trading_Experience__c` guardado descriptivo (`Avanzado`, `Principiante`). ✓
 
 ### Hallazgos clave
 - Pipeline Elementor->SF es asíncrono y en lotes (~5-35 min); `success:true` = encolado, no = en SF.
 - `Trading_Experience__c` no es picklist restringido: acepta cualquier valor (fix a descriptivos).
 - `Landing_Page_Id__c` y `utm_*__c` se derivan del `referrer`, no de campos directos.
-- `Is_Test_Account__c=true` (emails de prueba) se saltan el enriquecimiento de UTMs (90% vs 5%).
+- `Is_Test_Account__c=true` se salta el enriquecimiento de UTMs (90% reales vs 5% test). El flag
+  NO depende del dominio: un `@gmail.com` con "test" en nombre/email también quedó marcado test.
+- jsDelivr cachea la resolución de `@latest`: tras un tag nuevo puede seguir sirviendo el
+  anterior varios minutos aunque el purge responda 200. Las URLs por commit resuelven al instante.
 
 ## v1.0.0 — scaffold inicial
 

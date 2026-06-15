@@ -68,11 +68,14 @@ Investigación del form del webinar 25jun (Elementor -> admin-ajax -> middle DB 
   (`captureLandingUrl`, default true). NO se inyectan campos utm_*__c (se eliminó esa lógica).
 
 ### 4. Los leads de prueba se saltan el enriquecimiento de UTMs
-- Emails `@debugtest.com` / `@test.com` se marcan `Is_Test_Account__c = true`.
 - Cobertura de `utm_source__c`: leads reales 1831/2043 (**90%**); test 2/40 (**5%**).
-- Implicación: **no se puede verificar atribución con emails de prueba** — el enriquecimiento
-  no corre para test accounts. Para validar de verdad haría falta un email real (con cuidado:
-  dispara asignación a ventas). `Landing_Page_Id__c` sí se puebla incluso en test.
+- El flag `Is_Test_Account__c=true` **NO depende del dominio**: un `@gmail.com` con "test" en
+  nombre/email también quedó marcado test. Lo dispara probablemente el substring "test" y/o la
+  landing de preview (`?...&preview=true`). Buena noticia: esos leads **no** se asignan a ventas.
+- Implicación: **no se puede verificar el desglose de UTMs con emails de prueba** — el
+  enriquecimiento no corre para test accounts. `Landing_Page_Id__c` sí se puebla incluso en test
+  (de ahí se valida el canal `referrer -> Landing_Page_Id__c`). Para ver los `utm_*__c`
+  poblándose haría falta un email real (con cuidado: ese sí va a ventas).
 
 ### 5. Otros
 - CORS: `admin-ajax.php` solo permite `Origin: https://www.atfxlatam.com`. Desde otro origen
@@ -81,6 +84,29 @@ Investigación del form del webinar 25jun (Elementor -> admin-ajax -> middle DB 
   antes de llegar a SF (`{"success":false, errors:{...:"This field is required."}}`).
 - gaconnector_* y campos GA: dependen del plugin GA Connector (cookies/JS del navegador);
   no se pueblan en envíos sin sesión de browser.
+- Algunos envíos nunca sincronizan a SF (vimos `@test.com` y un duplicado caer fuera) pese a
+  `success:true`: el middle DB deduplica/descarta. No es bug del form.
+
+### 6. jsDelivr cachea la resolución de `@latest` (operacional)
+- Tras crear un tag nuevo, `@latest/loader.js` puede seguir sirviendo el anterior varios
+  minutos aunque `purge.jsdelivr.net` responda 200 (el purge limpia el archivo, no re-resuelve
+  el ref de inmediato). Confirmado: tardó ~min en pasar de 1.0.0 a 1.0.1.
+- Para test inmediato sin esperar cache: URL por commit `@<hash>` (inmutable, resuelve al toque).
+  El usuario NO quiere fijar versiones en Elementor; se queda en `@latest` y se espera la propagación.
+
+## Validación end-to-end (15 jun 2026, confirmada en SF)
+- Payload del bundle v1.0.1: `referrer = location.href` y **sin** `form_fields[Landing_Page_Id__c]`.
+- En Salesforce: `Landing_Page_Id__c` = exactamente el `referrer` que puso el motor. Canal probado.
+- `Trading_Experience__c` guardado descriptivo (`Avanzado`/`Principiante`), ya no `persona_*`.
+- Falta solo la prueba con UTMs reales (requiere landing publicada + URL con utm_* + email no-test).
+
+## Pendiente de despliegue en la landing real
+- Lo validado corre en el form de **preview** `pruebaskarencodeform`, NO en la página publicada
+  `training-sessions-25jun`. Mientras la página real siga con el form viejo, seguirá mandando
+  `persona_*`/`_HolaMemo`.
+- Para cerrar: en la página publicada (1) reemplazar el form por el HTML descriptivo
+  (`~/Desktop/atfx-form-webinar-25jun.html`), (2) dejar el `<script>` del loader `@latest`,
+  (3) quitar el form/script viejos (incluido el que abría Zoom en el click).
 
 ## Reglas de operación
 - Salesforce vía MCP es **solo lectura**: usar para verificar, nunca para escribir.
