@@ -1,11 +1,9 @@
 import type { ZodError } from "zod";
-import type { FieldErrors, FormConfig } from "./types";
-import { getField } from "./dom";
+import type { FieldDef, FieldErrors } from "./types";
 
-const FIELD_ERROR_CLASS = "atfx-field-error";
 const FORM_MESSAGE_CLASS = "atfx-form-message";
 
-// Convierte un ZodError en { friendlyKey: message } (primer issue por campo).
+// Convierte un ZodError en { schemaKey: message } (primer issue por campo).
 export function zodToFieldErrors(error: ZodError): FieldErrors {
   const out: FieldErrors = {};
   for (const issue of error.issues) {
@@ -15,43 +13,41 @@ export function zodToFieldErrors(error: ZodError): FieldErrors {
   return out;
 }
 
-// Errores del servidor vienen keyed por name interno; los mapea a friendlyKey.
-export function serverToFieldErrors(
-  serverErrors: Record<string, string>,
-  fields: FormConfig["fields"],
-): FieldErrors {
-  const nameToFriendly: Record<string, string> = {};
-  for (const [friendlyKey, name] of Object.entries(fields)) nameToFriendly[name] = friendlyKey;
+// Errores del servidor vienen keyed por name interno; los mapea a schemaKey.
+export function serverToFieldErrors(serverErrors: Record<string, string>, fields: FieldDef[]): FieldErrors {
+  const nameToKey: Record<string, string> = {};
+  for (const def of fields) nameToKey[def.name] = def.schemaKey;
 
   const out: FieldErrors = {};
   for (const [name, message] of Object.entries(serverErrors)) {
-    const friendly = nameToFriendly[name];
-    if (friendly) out[friendly] = message;
+    const key = nameToKey[name];
+    if (key) out[key] = message;
   }
   return out;
 }
 
 export function clearErrors(form: HTMLFormElement): void {
-  form.querySelectorAll(`.${FIELD_ERROR_CLASS}, .${FORM_MESSAGE_CLASS}`).forEach((el) => el.remove());
+  form.querySelectorAll(`.${FORM_MESSAGE_CLASS}`).forEach((el) => el.remove());
+  form.querySelectorAll<HTMLElement>("[data-error-for]").forEach((el) => (el.textContent = ""));
   form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
 }
 
 export function renderErrors(
   form: HTMLFormElement,
   errors: FieldErrors,
-  fields: FormConfig["fields"],
+  fields: FieldDef[],
   formMessage?: string,
 ): void {
-  for (const [friendlyKey, message] of Object.entries(errors)) {
-    const name = fields[friendlyKey];
-    const input = name ? getField(form, name) : null;
-    const group = input?.closest<HTMLElement>(".elementor-field-group") ?? input?.parentElement;
-    if (!group) continue;
-    group.classList.add("has-error");
-    const note = document.createElement("span");
-    note.className = FIELD_ERROR_CLASS;
-    note.textContent = message;
-    group.appendChild(note);
+  const keyToName: Record<string, string> = {};
+  for (const def of fields) keyToName[def.schemaKey] = def.name;
+
+  for (const [schemaKey, message] of Object.entries(errors)) {
+    const name = keyToName[schemaKey];
+    if (!name) continue;
+    const slot = form.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
+    const group = form.querySelector<HTMLElement>(`[data-field="${name}"]`);
+    if (slot) slot.textContent = message;
+    if (group) group.classList.add("has-error");
   }
 
   if (formMessage) {

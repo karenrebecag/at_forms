@@ -1,26 +1,24 @@
-import type { FormConfig } from "./types";
+import type { FieldDef, FormConfig } from "./types";
 
 // Localiza un input por su name interno (envuelto en form_fields[]).
-export function getField(form: HTMLFormElement, name: string): HTMLInputElement | null {
-  return form.querySelector<HTMLInputElement>(`[name="form_fields[${name}]"]`);
+export function getField(form: HTMLFormElement, name: string): HTMLInputElement | HTMLSelectElement | null {
+  return form.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="form_fields[${name}]"]`);
 }
 
-// Lee los valores crudos del DOM keyed por friendlyKey, listos para validar con zod.
-// Checkboxes -> boolean; el resto -> string.
-export function collectValues(
-  form: HTMLFormElement,
-  fields: Record<string, string>,
-): Record<string, unknown> {
+// Lee los valores crudos del DOM keyed por schemaKey, listos para validar con Zod.
+// Acceptance -> boolean; el resto -> string.
+export function collectValues(form: HTMLFormElement, fields: FieldDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const [friendlyKey, name] of Object.entries(fields)) {
-    const el = getField(form, name);
+  for (const def of fields) {
+    const el = getField(form, def.name);
     if (!el) continue;
-    out[friendlyKey] = el.type === "checkbox" ? el.checked : el.value;
+    out[def.schemaKey] =
+      def.kind === "acceptance" ? (el as HTMLInputElement).checked : el.value;
   }
   return out;
 }
 
-// Serializa todos los inputs del form (preserva post_id, form_id y hidden de SF).
+// Serializa todos los inputs del form (preserva meta top-level e hidden de negocio).
 export function serializeForm(form: HTMLFormElement): URLSearchParams {
   const params = new URLSearchParams();
   for (const [key, value] of new FormData(form).entries()) {
@@ -29,24 +27,24 @@ export function serializeForm(form: HTMLFormElement): URLSearchParams {
   return params;
 }
 
-// Sobrescribe en el payload los campos validados (valores limpios de zod + transforms).
+// Sobrescribe en el payload los campos validados (valores limpios de Zod + transforms).
 export function applyValidated(
   params: URLSearchParams,
   config: FormConfig,
   data: Record<string, unknown>,
 ): void {
-  for (const [friendlyKey, name] of Object.entries(config.fields)) {
-    if (!(friendlyKey in data)) continue;
-    const raw = data[friendlyKey];
-    const transform = config.transforms?.[friendlyKey];
-    const key = `form_fields[${name}]`;
+  for (const def of config.fields) {
+    if (!(def.schemaKey in data)) continue;
+    const raw = data[def.schemaKey];
+    const key = `form_fields[${def.name}]`;
 
-    if (typeof raw === "boolean") {
-      // Checkbox de aceptación: Elementor espera "on" cuando está marcado.
+    if (def.kind === "acceptance") {
+      // Elementor espera "on" cuando el checkbox está marcado.
       if (raw) params.set(key, "on");
       else params.delete(key);
       continue;
     }
+    const transform = config.transforms?.[def.schemaKey];
     params.set(key, transform ? transform(raw) : String(raw));
   }
 }
