@@ -35,12 +35,14 @@ function renderField(def: FieldDef, dict: Dict): HTMLElement {
   const labelEl = label({ forId: id, text: labelText(def.schemaKey, dict), required: def.required });
 
   if (def.kind === "select") {
+    const searchable = true;
     const control = select({
       id,
       name: def.name,
       options: resolveOptions(def.optionsRef, dict),
       required: def.required,
       placeholder: dict.selectPlaceholder,
+      searchable,
     });
     return fieldGroup({ name: def.name, control, labelEl, colSpan: def.colSpan ?? 100 });
   }
