@@ -130,7 +130,7 @@ async function handleSubmit(
       );
     }
 
-    const thankYou = renderThankYou(dict, { zoomLink });
+    const thankYou = renderThankYou(dict, { zoomLink, theme: form.dataset.atfxTheme });
     mount.replaceChildren(thankYou);
     revealThankYou(thankYou);
   } catch {

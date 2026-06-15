@@ -3,7 +3,11 @@ import { fillButton } from "../atoms/button";
 
 // Organismo: pantalla de agradecimiento inline (sin redirect). Reemplaza al form en el mount.
 // Si hay zoomLink, muestra CTA de respaldo por si el popup fue bloqueado.
-export function renderThankYou(dict: Dict, opts: { zoomLink?: string }): HTMLElement {
+export function renderThankYou(dict: Dict, opts: { zoomLink?: string; theme?: string }): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "atfx-form";
+  if (opts.theme) root.dataset.atfxTheme = opts.theme;
+
   const wrap = document.createElement("div");
   wrap.className = "atfx-thankyou";
   wrap.setAttribute("role", "status");
@@ -33,5 +37,6 @@ export function renderThankYou(dict: Dict, opts: { zoomLink?: string }): HTMLEle
     wrap.appendChild(cta);
   }
 
-  return wrap;
+  root.appendChild(wrap);
+  return root;
 }
