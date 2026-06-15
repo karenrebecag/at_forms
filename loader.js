@@ -2,7 +2,7 @@
 // Webflow/Elementor cargan SOLO este archivo con @latest; el loader inyecta el CSS y JS
 // apuntando al tag inmutable correcto, evitando el cache agresivo de assets en @latest.
 (function () {
-  var v = "1.0.1";
+  var v = "1.0.2";
   var base = "https://cdn.jsdelivr.net/gh/karenrebecag/at_forms";
 
   var css = document.createElement("link");
