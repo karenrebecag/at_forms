@@ -130,10 +130,14 @@ function combobox(opts: {
     hidden.dispatchEvent(new Event("blur", { bubbles: true }));
   }
 
+  function normalize(s: string): string {
+    return s.toLowerCase().normalize("NFD").replace(/\p{Mn}/gu, "");
+  }
+
   function filterOptions(query: string) {
-    const q = query.toLowerCase();
+    const q = normalize(query);
     list.querySelectorAll<HTMLLIElement>(".atfx-combobox-option").forEach((li) => {
-      li.hidden = q.length > 0 && !(li.dataset.label ?? "").toLowerCase().includes(q);
+      li.hidden = q.length > 0 && !normalize(li.dataset.label ?? "").includes(q);
     });
   }
 
