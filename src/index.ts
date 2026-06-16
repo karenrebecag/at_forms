@@ -5,7 +5,7 @@
 //        data-webinar-topic="..."            (opcional)
 //        data-webinar-date="..."             (opcional)
 //        data-lead-source="..."></div>       (opcional)
-const _v = import.meta.url.match(/at_forms@([^/]+)/)?.[1] ?? "dev";
+const _v = document.querySelector<HTMLScriptElement>('script[src*="at_forms@"]')?.src.match(/at_forms@([^/]+)/)?.[1] ?? "dev";
 console.log(`[atfx-forms] v${_v} loaded`);
 
 import { getForm } from "./core/registry";
