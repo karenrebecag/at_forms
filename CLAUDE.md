@@ -102,7 +102,7 @@ Códigos SF reales (de `GROUP BY` en Lead):
 ## Hallazgos verificados (15 jun 2026) — pipeline Elementor -> SF
 
 1. **Pipeline asíncrono en lotes** (middle DB / Zapier). `success:true` = encolado, NO = en SF.
-   Los lotes caen irregulares (~5-35+ min; segundo `:38`). Nunca esperes el lead al instante.
+   Los lotes caen irregulares (~5-35+ min). Nunca esperes el lead al instante.
 2. **admin-ajax acepta valores arbitrarios** (no valida picklists). `Trading_Experience__c` no es
    restringido: los `persona_2/4/5` originales eran solo lo que el form mandaba. Fix = descriptivos.
 3. **Atribución por `referrer`, no por campos**: `Landing_Page_Id__c` se deriva del campo top-level
@@ -117,10 +117,54 @@ Códigos SF reales (de `GROUP BY` en Lead):
 6. **jsDelivr cachea la resolución de `@latest`**: tras un tag nuevo puede seguir sirviendo el
    anterior varios minutos aunque el purge responda 200. URLs por commit (`@<hash>`) resuelven al
    instante. El usuario NO quiere fijar versiones; se queda en `@latest` y se espera la propagación.
-   (Patrón de espera: poll en background hasta que aparezca un string nuevo del bundle.)
+   Purge manual: `curl -s "https://purge.jsdelivr.net/gh/karenrebecag/at_forms@latest/loader.js"`.
 7. **CORS**: admin-ajax solo permite `Origin: https://www.atfxlatam.com`. curl y forms nativos no
    aplican CORS; fetch desde otro origen sí se bloquea. La consola del propio sitio sí puede llamarlo.
 8. El checkbox de aceptación es **required a nivel Elementor/WP**: vacío rechaza antes de SF.
+9. **Entity__c es siempre sobreescrito a "GM" por el middleware** — el form puede mandar "MU" y
+   llega "GM" en SF. El valor en `forms/lead.ts` es irrelevante; el connector lo pisa server-side.
+   No cambiar a "GM" en el código: sería una falsa dependencia de comportamiento interno del CRM.
+10. **Sesión de admin de WordPress silencia la acción de SF**: submits con cookie
+    `wordpress_logged_in_*` activa devuelven 200 OK con `aanumber` pero no crean lead en SF.
+    Siempre probar en incógnito (sin sesión WP) para validar el pipeline end-to-end.
+
+## Hallazgos verificados (16 jun 2026) — fix del pipeline custom → SF (v1.0.11)
+
+**Bug:** el form custom llegaba a WordPress (200 OK, `aanumber` asignado) pero nunca creaba
+el lead en Salesforce. Los forms nativos de Elementor Pro sí funcionaban.
+
+**Causa raíz:** dos diferencias en cómo `fetch` construye el request vs jQuery (usado por Elementor):
+
+| Header / campo | Form nativo (Elementor Pro + jQuery) | Form custom antes del fix |
+|---|---|---|
+| `Content-Type` | `multipart/form-data` | `application/x-www-form-urlencoded` |
+| `X-Requested-With` | `XMLHttpRequest` | ausente |
+
+El handler PHP de Elementor Pro (o el plugin `atfx-general`) valida `X-Requested-With: XMLHttpRequest`
+antes de disparar las acciones del form (incluida la de Salesforce). `fetch` nativo no agrega este
+header; jQuery sí. Sin él, WordPress acepta el AJAX (200 OK) pero la acción SF se salta en silencio.
+
+**Fix aplicado en `src/core/submit-elementor.ts` (v1.0.11):**
+```ts
+// Antes:
+headers: { "Content-Type": "application/x-www-form-urlencoded" },
+body: payload.toString(),
+
+// Después:
+const formData = new FormData();
+for (const [key, value] of payload.entries()) formData.append(key, value);
+// fetch sin Content-Type explícito → browser pone multipart/form-data con boundary correcto
+headers: { "X-Requested-With": "XMLHttpRequest" },
+body: formData,
+```
+
+**Diagnóstico del pipeline** (verificado contra SF vía MCP):
+- 200 OK + `success:true` + `aanumber` = encolado en WP, NO garantiza lead en SF.
+- Los leads que llegan lo hacen en segundos; si no llegan en 10 min, no llegan nunca.
+- `Landing_Page_Id__c` = valor del campo `referrer` del POST (= `location.href` via `applyLandingUrl`).
+- `import.meta.url` no funciona con esbuild (target es2019): esbuild reemplaza `import.meta` con `{}`
+  causando `TypeError` en carga del módulo. Usar `document.querySelector('script[src*="at_forms@"]')`
+  para leer la versión del bundle en runtime.
 
 ## Desarrollo
 
