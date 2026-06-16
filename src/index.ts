@@ -5,6 +5,9 @@
 //        data-webinar-topic="..."            (opcional)
 //        data-webinar-date="..."             (opcional)
 //        data-lead-source="..."></div>       (opcional)
+const _v = import.meta.url.match(/at_forms@([^/]+)/)?.[1] ?? "dev";
+console.log(`[atfx-forms] v${_v} loaded`);
+
 import { getForm } from "./core/registry";
 import { bindForm } from "./core/form-engine";
 import { renderForm } from "./ui/organisms/form";

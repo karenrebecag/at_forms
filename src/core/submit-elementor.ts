@@ -21,10 +21,12 @@ export async function submitToElementor(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
+      const formData = new FormData();
+      for (const [key, value] of payload.entries()) formData.append(key, value);
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: payload.toString(),
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        body: formData,
         signal: controller.signal,
       });
       clearTimeout(timer);
