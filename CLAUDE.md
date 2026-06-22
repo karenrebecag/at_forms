@@ -28,7 +28,8 @@ casos de uso; el comportamiento lo definen los **atributos**:
      data-zoom-link="https://atfx.zoom.us/webinar/register/WN_..."  <!-- opcional -->
      data-webinar-topic="Trading Experience"   <!-- opcional -->
      data-webinar-date="2026-06-25 18:00:00"   <!-- opcional -->
-     data-lead-source="Webinar"></div>          <!-- opcional, default "Webinar" -->
+     data-lead-source="Webinar"                 <!-- opcional, default "Webinar" -->
+     data-bdm-owner="005T1000007ZjueIAC"></div>  <!-- opcional: SF User Id del BDM -->
 
 <script data-cfasync="false"
   src="https://cdn.jsdelivr.net/gh/karenrebecag/at_forms@latest/loader.js"></script>

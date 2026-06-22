@@ -3,6 +3,13 @@ import { registerForm } from "../core/registry";
 import { createLeadSchema } from "../schemas/lead";
 import { ga4Lead, gtmLead, metaLead } from "../integrations";
 
+// Llave form_fields[...] que el connector mapea al owner del Lead. SF tiene OwnerId__c (string):
+// el form lo setea y un flow server-side lo copia al OwnerId real y corre la asignación.
+export const OWNER_KEY = "OwnerId__c";
+
+// Salesforce User Id: 15 o 18 chars, prefijo 005. Formato inválido -> se omite (auto-asignación).
+export const OWNER_ID_PATTERN = /^005[A-Za-z0-9]{12}([A-Za-z0-9]{3})?$/;
+
 // Config genérica de lead. El caso de uso (webinar vs lead simple, idioma) lo definen los
 // atributos del shortcode; aquí solo viven la estructura de campos y el routing a Salesforce.
 const fields: FieldDef[] = [
