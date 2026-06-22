@@ -107,6 +107,27 @@ function countryFlag(iso3: string): string {
   }).join("");
 }
 
+// Inversos de los mapas de arriba para resolver desde un ISO2 (lo que devuelve la geo-IP)
+// hacia los valores que usan los selects: country = ISO3, dialling_code = prefijo telefónico.
+// Primera coincidencia gana (NANP comparte "1": US queda primero en DIAL_TO_ISO2).
+const ISO2_TO_ISO3: Record<string, string> = Object.fromEntries(
+  Object.entries(ISO3_TO_ISO2).map(([iso3, iso2]) => [iso2, iso3]),
+);
+const ISO2_TO_DIAL: Record<string, string> = {};
+for (const [dial, iso2] of Object.entries(DIAL_TO_ISO2)) {
+  if (!(iso2 in ISO2_TO_DIAL)) ISO2_TO_DIAL[iso2] = dial;
+}
+
+// ISO2 (geo-IP) -> value del select de país (ISO3). undefined si no está en la lista.
+export function iso3ForIso2(iso2: string): string | undefined {
+  return ISO2_TO_ISO3[iso2.toUpperCase()];
+}
+
+// ISO2 (geo-IP) -> value del select de prefijo (código telefónico). undefined si no mapea.
+export function dialForIso2(iso2: string): string | undefined {
+  return ISO2_TO_DIAL[iso2.toUpperCase()];
+}
+
 // Países (value = ISO3, label = nombre en español con emoji de bandera).
 export const COUNTRIES: SelectOption[] = [
   ["AFG", "Afganistán"], ["ALB", "Albania"], ["DZA", "Argelia"], ["ASM", "Samoa Americana"],

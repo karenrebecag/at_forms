@@ -12,10 +12,12 @@ import { getForm } from "./core/registry";
 import { bindForm } from "./core/form-engine";
 import { renderForm } from "./ui/organisms/form";
 import { revealForm } from "./ui/motion";
+import { applyGeoPreselect } from "./core/geo";
 import { DICTS, resolveLang } from "./i18n";
 
 // Side-effect import: registra la config.
 import "./forms/lead";
+import { OWNER_KEY, OWNER_ID_PATTERN } from "./forms/lead";
 
 function attr(mount: HTMLElement, key: string): string {
   return (mount.dataset[key] ?? "").trim();
@@ -38,12 +40,15 @@ function boot(): void {
     const webinarTopic = attr(mount, "webinarTopic");
     const webinarDate = attr(mount, "webinarDate");
     const leadSource = attr(mount, "leadSource");
+    const bdmOwner = attr(mount, "bdmOwner");
 
     // Hidden por instancia: base + idioma + (webinar solo si hay zoom link).
     const hidden: Record<string, string> = { ...(config.hidden ?? {}) };
     hidden["Email_language_lead__c"] = dict.sf.emailLang;
     hidden["Landing_Page_Language__c"] = dict.sf.landingLang;
     if (leadSource) hidden["lead_source"] = leadSource;
+    // Vacío/formato inválido -> sin owner -> SF auto-asigna. Válido -> asigna a ese BDM.
+    if (bdmOwner && OWNER_ID_PATTERN.test(bdmOwner)) hidden[OWNER_KEY] = bdmOwner;
 
     if (zoomLink) {
       hidden["Webinar_venue_zoom_link__c"] = zoomLink;
@@ -65,6 +70,8 @@ function boot(): void {
     mount.replaceChildren(form);
     bindForm(form, { config: instanceConfig, schema, dict, mount, zoomLink: zoomLink || undefined });
     revealForm(form);
+    // Fire-and-forget: no bloquea el render; preselecciona país/prefijo por IP si llega a tiempo.
+    void applyGeoPreselect(form);
   });
 }
 

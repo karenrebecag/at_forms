@@ -1,5 +1,11 @@
 import type { SelectOption } from "../../core/types";
 
+// Wrapper con un setter imperativo para preseleccionar un valor (p. ej. geo-IP) tras el render.
+// presetValue no pisa una selección existente: devuelve false si el campo ya tiene valor.
+export interface PresettableElement extends HTMLElement {
+  presetValue?(value: string): boolean;
+}
+
 export function select(opts: {
   id: string;
   name: string;
@@ -30,6 +36,14 @@ export function select(opts: {
     o.textContent = opt.label;
     el.appendChild(o);
   }
+
+  (wrapper as PresettableElement).presetValue = (value: string): boolean => {
+    if (el.value) return false;
+    if (!Array.from(el.options).some((o) => o.value === value)) return false;
+    el.value = value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  };
 
   wrapper.appendChild(el);
   return wrapper;
@@ -160,6 +174,20 @@ function combobox(opts: {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isOpen) close();
   });
+
+  (wrapper as PresettableElement).presetValue = (value: string): boolean => {
+    if (hidden.value) return false;
+    const li = list.querySelector<HTMLLIElement>(`.atfx-combobox-option[data-value="${CSS.escape(value)}"]`);
+    if (!li) return false;
+    hidden.value = value;
+    valueSpan.textContent = li.dataset.label ?? value;
+    delete trigger.dataset.placeholder;
+    list.querySelectorAll<HTMLLIElement>(".atfx-combobox-option").forEach((o) => {
+      o.setAttribute("aria-selected", o.dataset.value === value ? "true" : "false");
+    });
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  };
 
   return wrapper;
 }

@@ -16,6 +16,18 @@
 - **Más formularios**: el patrón ya es genérico (config + atributos). Añadir casos no-webinar.
 - **Lead `@gmail.com` de pruebas**: identificar los `karentest*@gmail.com` en SF para depuración.
 
+## Preselección de país/prefijo por geo-IP (solo front, en progreso)
+
+- Al montar el form se detecta el país por IP y se preseleccionan `country_of_residence` (ISO3)
+  y `dialling_code` (prefijo). Sin API key (bundle público) y sin bloquear el render
+  (fire-and-forget tras `revealForm`). Degrada en silencio ante red caída, timeout (2.5s) o país
+  fuera de la lista; **no pisa** una selección manual del usuario.
+- `core/geo.ts`: `fetchCountryIso2` con `AbortController` + fallback de proveedores
+  (`ipwho.is` → `get.geojs.io`) y `applyGeoPreselect`.
+- `data/options.ts`: lookups `iso3ForIso2` / `dialForIso2` (inversos de los mapas existentes).
+- `ui/atoms/select.ts`: método imperativo `presetValue` en combobox y select nativo (guard por
+  valor existente).
+
 ## v1.0.4 — theme + GSAP (en progreso)
 
 - Atributo `data-theme="light|dark"`: switch de tokens vía `.atfx-form[data-atfx-theme]` (sin
